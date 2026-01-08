@@ -1,6 +1,3 @@
-Here is the **updated, clear, and precise README**, with the **room options added cleanly** and easy to follow:
-
-````md
 # BOMBIM_material_arrivals
 
 ```bash
