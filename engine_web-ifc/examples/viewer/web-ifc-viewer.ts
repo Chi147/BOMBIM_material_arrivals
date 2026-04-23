@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { IFCSPACE } from "../../dist/web-ifc-api";
+import { RoomMaterialVisualizer } from "../../src/ts/material-arrivals/RoomMaterialVisualizer"; ///change1, add this line
+
 
 import { IfcApplication } from "./../../src/ifc-schema";
 import {
@@ -37,11 +39,14 @@ let timeout = undefined;
 
 let modelIDGlobal = -1;
 
-// Room name -> bounding box (in world coords)
-const roomBBoxByName = new Map<string, THREE.Box3>();
+// // Room name -> bounding box (in world coords)
+// const roomBBoxByName = new Map<string, THREE.Box3>();
 
-// Keep “material boxes” so we can clear them
-const materialMeshes: THREE.Mesh[] = [];
+// // Keep “material boxes” so we can clear them
+// const materialMeshes: THREE.Mesh[] = [];   //change2, comment these const lines out and add the line below 
+let arrivalsVis: RoomMaterialVisualizer | null = null;
+
+
 
 function Edited(monacoEditor: Monaco.editor.IStandaloneCodeEditor) {
   let code = monacoEditor.getValue();
@@ -240,75 +245,85 @@ async function LoadModel(data: Uint8Array) {
   // ---- Build a cache of IfcSpace bounding boxes by their Name ----
 // ---- Build a cache of IfcSpace bounding boxes by their Name ----
 // ---- Build a cache of IfcSpace bounding boxes by their Name ----
+
 try {
-  const ids = ifcAPI.GetLineIDsWithType(modelID, IFCSPACE);
-  const spaces: any[] = [];
-  for (let i = 0; i < ids.size(); i++) {
-    const id = ids.get(i);
-    const space = ifcAPI.GetLine(modelID, id);
-    if (space) spaces.push(space);
-  }
-
-  // Map expressID → meshes in the scene
-  const meshesById = new Map<number, THREE.Mesh[]>();
-  scene.traverse((o) => {
-    const m = o as THREE.Mesh;
-    if ((m as any).isMesh && m.userData && typeof m.userData.expressID === "number") {
-      const id = m.userData.expressID as number;
-      const arr = meshesById.get(id);
-      if (arr) arr.push(m);
-      else meshesById.set(id, [m]);
-    }
-  });
-
-  for (const s of spaces) {
-    const name = s?.Name?.value?.trim?.();
-    if (!name) continue;
-    const id = s.expressID as number;
-    const meshes = meshesById.get(id);
-
-    const bbox = new THREE.Box3();
-
-    if (meshes && meshes.length > 0) {
-      for (const m of meshes) bbox.expandByObject(m);
-    } else {
-// ✅ If there’s no geometry, place dummy bbox near building center
-// ✅ If there’s no geometry, create a dummy bbox aligned to the floor
-const sceneBBox = new THREE.Box3().setFromObject(scene);
-const center = sceneBBox.getCenter(new THREE.Vector3());
-const minY = sceneBBox.min.y; // floor height
-const spread = 4; // offset per room
-const idx = roomBBoxByName.size;
-
-bbox.set(
-  new THREE.Vector3(center.x + idx * spread - 2, minY, center.z - 2),
-  new THREE.Vector3(center.x + idx * spread + 2, minY + 2, center.z + 2)
-);
-
-console.warn(`No mesh for ${name}, using floor-aligned dummy bbox`, bbox);
-
-
-    }
-
-    roomBBoxByName.set(name, bbox);
-  }
-
-  // ✅ Normalize keys to remove quotes and trim whitespace
-for (const key of Array.from(roomBBoxByName.keys())) {
-  const clean = key.replace(/^'+|'+$/g, "").trim(); // remove stray quotes
-  if (clean !== key) {
-    const val = roomBBoxByName.get(key)!;
-    roomBBoxByName.delete(key);
-    roomBBoxByName.set(clean, val);
-  }
-}
-console.log("Cleaned roomBBoxByName keys:", Array.from(roomBBoxByName.keys()));
-
-
-  console.log("✅ Cached IfcSpace bboxes:", roomBBoxByName.size);
+  arrivalsVis = new RoomMaterialVisualizer(scene, ifcAPI, modelID, IFCSPACE);
+  arrivalsVis.indexRoomsByIfcSpaceName();
 } catch (err) {
-  console.warn("Could not cache IfcSpace bounding boxes:", err);
+  console.warn("Could not index IfcSpace bounding boxes:", err);
 }
+
+
+//change 4 comment section below and add section above
+// try {
+//   const ids = ifcAPI.GetLineIDsWithType(modelID, IFCSPACE);
+//   const spaces: any[] = [];
+//   for (let i = 0; i < ids.size(); i++) {
+//     const id = ids.get(i);
+//     const space = ifcAPI.GetLine(modelID, id);
+//     if (space) spaces.push(space);
+//   }
+
+//   // Map expressID → meshes in the scene
+//   const meshesById = new Map<number, THREE.Mesh[]>();
+//   scene.traverse((o) => {
+//     const m = o as THREE.Mesh;
+//     if ((m as any).isMesh && m.userData && typeof m.userData.expressID === "number") {
+//       const id = m.userData.expressID as number;
+//       const arr = meshesById.get(id);
+//       if (arr) arr.push(m);
+//       else meshesById.set(id, [m]);
+//     }
+//   });
+
+//   for (const s of spaces) {
+//     const name = s?.Name?.value?.trim?.();
+//     if (!name) continue;
+//     const id = s.expressID as number;
+//     const meshes = meshesById.get(id);
+
+//     const bbox = new THREE.Box3();
+
+//     if (meshes && meshes.length > 0) {
+//       for (const m of meshes) bbox.expandByObject(m);
+//     } else {
+// // ✅ If there’s no geometry, place dummy bbox near building center
+// // ✅ If there’s no geometry, create a dummy bbox aligned to the floor
+// const sceneBBox = new THREE.Box3().setFromObject(scene);
+// const center = sceneBBox.getCenter(new THREE.Vector3());
+// const minY = sceneBBox.min.y; // floor height
+// const spread = 4; // offset per room
+// const idx = roomBBoxByName.size;
+
+// bbox.set(
+//   new THREE.Vector3(center.x + idx * spread - 2, minY, center.z - 2),
+//   new THREE.Vector3(center.x + idx * spread + 2, minY + 2, center.z + 2)
+// );
+
+// console.warn(`No mesh for ${name}, using floor-aligned dummy bbox`, bbox);
+
+
+//     }
+
+//     roomBBoxByName.set(name, bbox);
+//   }
+
+//   // ✅ Normalize keys to remove quotes and trim whitespace
+// for (const key of Array.from(roomBBoxByName.keys())) {
+//   const clean = key.replace(/^'+|'+$/g, "").trim(); // remove stray quotes
+//   if (clean !== key) {
+//     const val = roomBBoxByName.get(key)!;
+//     roomBBoxByName.delete(key);
+//     roomBBoxByName.set(clean, val);
+//   }
+// }
+// console.log("Cleaned roomBBoxByName keys:", Array.from(roomBBoxByName.keys()));
+
+
+//   console.log("✅ Cached IfcSpace bboxes:", roomBBoxByName.size);
+// } catch (err) {
+//   console.warn("Could not cache IfcSpace bounding boxes:", err);
+// }
 // ----------------------------------------------------------------
 
 
@@ -434,14 +449,27 @@ async function setMaterialsInRoom(roomName: string, count: number) {
 }
 
 // Expose functions to the browser so index.html can call them
+// if (typeof window !== "undefined") {
+//   // @ts-ignore
+//   window.__setMaterialsInRoom = (roomName: string, count: number) =>
+//     setMaterialsInRoom(roomName, count);
+
+//   // @ts-ignore
+//   window.__clearMaterialBoxes = () => clearMaterialBoxes();
+// }  //change4, comment these and replace by below section 
 if (typeof window !== "undefined") {
   // @ts-ignore
   window.__setMaterialsInRoom = (roomName: string, count: number) =>
-    setMaterialsInRoom(roomName, count);
+    arrivalsVis?.setMaterialsInRoom(roomName, count);
 
   // @ts-ignore
-  window.__clearMaterialBoxes = () => clearMaterialBoxes();
+  window.__clearMaterialBoxes = () => arrivalsVis?.clearMaterialBoxes();
+
+  // optional helper for debugging
+  // @ts-ignore
+  window.__listRooms = () => arrivalsVis?.getIndexedRoomNames();
 }
+
 
 // make viewer internals available in browser console
 if (typeof window !== "undefined") {
